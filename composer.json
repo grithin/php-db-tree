@@ -1,0 +1,22 @@
+{
+    "name": "grithin/php-DbTree",
+    "description": "PHP db tree.",
+    "keywords": ["php db tree"],
+    "license": "Apache-2.0",
+    "homepage": "http://devtools.grithin.com",
+    "authors": [
+        {
+            "name": "Adam F Frederick",
+            "email": "bob_bf2@deemit.com"
+        }
+    ],
+    "require": {
+        "php": ">=5.5.9",
+        "grithin/phpbase": "dev-master"
+    },
+    "autoload": {
+        "psr-4": {
+            "Grithin\\": "src/"
+        }
+    }
+}
