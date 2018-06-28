@@ -1,22 +1,13 @@
 <?
 namespace Grithin;
 
-/*
-@TODO
--	move_replace operation
--	node_insert_before
--	test appending with existing node
--	test prepending with existing node
+/* About
+for handling order_in order_out indexed tree (for things like nested comments)
 
+@note operations cause temporary tree infidelity so should not be run cosequently
 */
 
-
-
-///for handling order_in order_out indexed tree (for things like nested comments)
-/**
-@note moving operations cause intermediary order_in overlaps
-
-
+/* Example db table (see tests for item_id columned table)
 
 create table tree (
  `id` int auto_increment not null ,
@@ -31,19 +22,9 @@ create table tree (
  key id__parent (`id__parent`)
 ) engine innodb charset utf8;
 
-
-$node['order_in'] = $position['order_in'];
-$node['order_out'] = $node['order_in'] + 1;
-$node['order_depth'] = $position['order_depth'];
-$node['id__parent'] = $position['id__parent'];
-$position['id__parent'] = 0;
-
-
-
-
-
-
 */
+
+
 class DbTree{
 	use SingletonDefault;
 	public $db;
@@ -137,30 +118,6 @@ class DbTree{
 	static function node_size($node){
 		return ($node['order_out'] - $node['order_in']) + 1;
 	}
-
-	/*
-	minimum node operations
-	-	append
-	-	place before
-	-	prepend (in that place before depends upon knowing the first child, prepend serves to ensure prepending regardless of whether the receiving node has children)
-	-	delete subtree
-	basic tree operations
-	-	subtree_adjust_position_state
-	-	tree offset
-	compound operations
-	-	replace node with existing node:
-		-	append replacee children into replacer
-		-	delete replacee
-		-	place replacer at replacee position
-	move node
-		move node to end of tree
-		shrink tree from moved node position
-		expand tree at new position
-		place node
-
-	*/
-
-
 
 
 	# insert new or existing node at position by moving things right
@@ -391,6 +348,7 @@ class DbTree{
 		return $lineage[$baseDepth];
 	}
 
+	# find gaps in order_in order_out sequence
 	protected function tree_gaps(){
 		$all = $this->db->rows('select order_in, order_out, order_depth, name from '.$this->db->quote_identity($this->table).$this->db->where($this->tree_where_get(), false).' order by order_in');
 		$orders = [];
@@ -451,6 +409,9 @@ class DbTree{
 
 		$this->db->update($this->table, ['id__parent'=>$position['id__parent']], $this->tree_where_get(['id__parent'=>$from['id__parent']]));
 	}
+	/*
+	replace one node with another, even if replacee is parent
+	*/
 	protected function node_replace_with($replacee, $replacer){
 		$replacee = $this->node_return($replacee);
 		$replacer = $this->node_return($replacer);
