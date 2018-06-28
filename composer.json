@@ -10,9 +10,25 @@
             "email": "bob_bf2@deemit.com"
         }
     ],
+	 "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://repos.clrmo.com/root/phpbase.git"
+        },
+		  {
+            "type": "vcs",
+            "url": "https://repos.clrmo.com/root/phpdb.git"
+        },
+        {
+            "type": "vcs",
+            "url": "https://repos.clrmo.com/root/php-loaded.git"
+        }
+    ],
     "require": {
         "php": ">=5.5.9",
-        "grithin/phpbase": "dev-master"
+        "grithin/phpbase": "dev-master",
+		  "grithin/phpdb": "dev-master",
+		  "grithin/php-loaded": "dev-master"
     },
     "autoload": {
         "psr-4": {
