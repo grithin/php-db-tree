@@ -149,12 +149,12 @@ class DbTree{
 			$node['order_in'] = $position['order_in'];
 			$node['order_out'] = $node['order_in'] + 1;
 			$node['order_depth'] = $position['order_depth'];
-			$node['id__parent'] = $position['id__parent'];
+			$node['id__parent'] = $position['id__parent'] ? $position['id__parent'] : 0;
 			return $this->db->insert($this->table, array_merge($this->base_insert, $node));
 		}
 	}
 	function tree_all_nodes(){
-		return $this->db->rows('select order_in, order_out, order_depth, name from '.$this->db->quote_identity($this->table).$this->db->where($this->tree_where_get(), false).' order by order_in');
+		return $this->db->rows('select * from '.$this->db->quote_identity($this->table).$this->db->where($this->tree_where_get(), false).' order by order_in');
 	}
 
 	# append new or existing node to a parent node or to root
