@@ -270,6 +270,24 @@ class DbTree{
 			$this->base_where + ['order_in?>='=>$node['order_in'], 'order_in?<='=>$node['order_out']]);
 	}
 
+	protected function node_parent($node,$columns=[]){
+		$node = $this->node_return($node);
+		if(!$columns){
+			$columns = $this->columns;
+		}
+		if(is_array($columns)){
+			$columns = implode(', ',array_map([$this->db,'quote_identity'],$columns));
+		}
+
+		return $this->db->row(['select '.$columns.'
+			from '.$this->db->quote_identity($this->table).'
+			where id = ?', [$node['id__parent']]]);
+	}
+	protected function node_parent_id($node){
+		$node = $this->node_return($node);
+		return $node['id__parent'];
+	}
+
 
 	//sql to get all columns for parents (enclose it in other sql for further restrictions)
 	protected function node_parent_sql($node){

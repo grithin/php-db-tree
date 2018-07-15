@@ -77,6 +77,11 @@ class MainTests extends TestCase{
 
 		$c1_1_id = end($ids);
 		$c1_id  = $ids[1];
+
+		$this->assertEquals($c1_id, $DbTree->node_parent($c1_1_id)['id'], '`node_parent` failed');
+		$this->assertEquals($c1_id, $DbTree->node_parent_id($c1_1_id), '`node_parent_id` failed');
+
+
 		$c1_2_id = $DbTree->node_append(['name'=>'bob c1.2'], $c1_id);
 		$c1_3_id = $DbTree->node_append(['name'=>'bob c1.3'], $c1_id);
 		$DbTree->node_append(['name'=>'bob c1.2.1'], $c1_2_id);
