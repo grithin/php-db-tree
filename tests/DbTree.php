@@ -41,7 +41,6 @@ class MainTests extends TestCase{
 		$ids[] = $DbTree->node_append(['name'=>'bob c1.1'], end($ids));
 		$DbTree->node_append(['name'=>'bob c1.1.1'], end($ids));
 		$DbTree->node_append(['name'=>'bob c1.1.2'], end($ids));
-		#ppe($x);
 
 		$node = $DbTree->node_get($bob_id);
 		$x = $DbTree->node_children_as_nested($bob_id);
@@ -51,6 +50,9 @@ class MainTests extends TestCase{
 		$this->assertEquals('bob c1.1.1', $x[0]['children'][0]['children'][0]['name'], '`node_append` failed order');
 		$x = $DbTree->node_children($bob_id);
 		$this->assertEquals(4, count($x), '`node_children` miss-count');
+
+		$x = $DbTree->node_immediate_children($bob_id);
+		$this->assertEquals(1, count($x), '`node_immediate_children` miss-count');
 
 		$DbTree->node_prepend(['name'=>'bob c1.1.3'], end($ids));
 		$x = $DbTree->node_children_as_nested($bob_id);

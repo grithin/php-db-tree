@@ -325,7 +325,6 @@ class DbTree{
 		return false;
 	}
 	protected function node_children($node=null,$columns=[]){
-
 		if(!$columns){
 			$columns = $this->columns;
 		}
@@ -347,6 +346,21 @@ class DbTree{
 			return true;
 		}
 		return false;
+	}
+	protected function node_immediate_children($node=null,$columns=[]){
+		if(!$columns){
+			$columns = $this->columns;
+		}
+		if($node){
+			$node = $this->node_return($node);
+			$where = ['order_in?>' => $node['order_in'],'order_out?<'=>$node['order_out'], 'order_depth = '.($node['order_depth']+1)];
+		}else{
+			$where = [];
+		}
+
+		return $this->db->rows($this->table,
+			$this->tree_where_get($where),
+			$columns, 'order_in asc');
 	}
 	protected function node_children_as_nested($node=null,$columns=[]){
 		if(!$columns){
