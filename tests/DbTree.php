@@ -149,6 +149,20 @@ class MainTests extends TestCase{
 
 		$count = count($DbTree->tree_all_nodes());
 		$this->assertEquals(17, $count, 'count wrong');
+
+
+		$DbTree->node_move_before_node($sue_id, $bob_id);
+		$this->assertEquals([], $DbTree->tree_gaps(), '`node_move_before_node` created gaps');
+		$sue = $DbTree->node_get($sue_id);
+		$bob = $DbTree->node_get($bob_id);
+		$this->assertEquals($bob['order_in'] > $sue['order_in'], true, '`node_move_before_node` failed to reposition');
+
+
+		$DbTree->node_move_after_node($sue_id, $bob_id);
+		$this->assertEquals([], $DbTree->tree_gaps(), '`node_move_after_node` created gaps');
+		$sue = $DbTree->node_get($sue_id);
+		$bob = $DbTree->node_get($bob_id);
+		$this->assertEquals($bob['order_in'] < $sue['order_in'], true, '`node_move_after_node` failed to reposition');
 	}
 
 	function test_no_base_where(){

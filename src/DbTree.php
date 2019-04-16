@@ -1,10 +1,15 @@
 <?
 namespace Grithin;
 
-/* About
+/* About.md
 for handling order_in order_out indexed tree (for things like nested comments)
 
-@note operations cause temporary tree infidelity so should not be run cosequently
+@note operations cause temporary tree infidelity so should not be run consequently.  Conseqently, functions are `protected` to force a run through __call, which turns them into transactions
+
+# Actions
+## Changing Parent
+use node_append or node_prepend
+
 */
 
 /* Example db table (see tests for item_id columned table)
@@ -26,7 +31,7 @@ create table tree (
 
 
 class DbTree{
-	use SingletonDefault;
+	use \Grithin\testCall;
 	public $db;
 	public $base_where = array();
 
@@ -47,13 +52,8 @@ class DbTree{
 
 		$this->columns = $this->db->column_names($table);
 	}
-	static $functionExceptions = ['tree_node_delete','node_get' ,'node_return'];
 	///tree operations need to be atomic, and mutex
 	function __call($fnName,$args){
-		if(in_array($fnName,self::$functionExceptions)){
-			return call_user_func_array(array($this,$fnName),$args);
-		}
-
 		$this->__methodExists($fnName);
 		$this->db->start_transaction();
 		try{
@@ -65,18 +65,92 @@ class DbTree{
 		}
 		return $return;
 	}
-	function tree_node_delete($fk=null){
+
+
+	/* About
+	technical: offset orders >= some `order_in`
+
+	practical: used for either expanding a section of the tree (for placement of a node) or contracting a section of the tree (on node removal)
+	*/
+	protected function tree_offset($offset, $order_in){
+		# order_in offset will only affect the current node and nodes that come after it
+		$this->db->update($this->table,
+			[':order_in'=> 'order_in + '.$offset],  $this->tree_where_get(['order_in?>='=>$order_in]));
+		# order_out offset will affect the current node, the nodes that come after it, and the nodes that contain the current node (which have a order_out dependent upon their children)
+		$this->db->update($this->table,
+			[':order_out'=> 'order_out + '.$offset], $this->tree_where_get(['order_out?>='=>$order_in]));
+	}
+
+
+	# Expand a tree to fit a node (empty node (+2) or a childed node (+2 + 2x)), at some position, by increasing the order ins and order outs above the position
+	protected function tree_expand($node, $order_in){
+		$node = $this->node_return($node);
+		$adjustment = $node['order_out'] ? $node['order_out'] - $node['order_in'] + 1 : 2;
+		$this->tree_offset($adjustment, $order_in);
+	}
+	# Collapse a tree to account for removed node (empty node (-2) or a childed node (-2 - 2x)), at some position, by increasing the order ins and order outs above the position
+	protected function tree_collapse($node){
+		$node = $this->node_return($node);
+		$adjustment = $node['order_out'] - $node['order_in'] + 1;
+		$this->tree_offset(-$adjustment, $node['order_in']);
+	}
+
+
+
+	/* About
+	technical: offset the order_in order_out columns, to be at the new $to['order_in'] and $to['order_depth'],  of all items within and at the $from['order_in'] and $from['order_out'] of $from
+
+	practical: this effectively moves a node and it's tree into a place where room has already beed made.  It will leave a gat, and it is expected that before this function is used, tree_offset is used to make gap at the new position, and after this function is used, tree_offset is used to close the gap at the former position.  Note, in the case that a node is moved laterally backwards, before another smaller node, the potential overlap in $from and $to is avoided by that fact that tree_offset will move the moving node (and the $from) forward to make room prior to this function being called, and so the $to and $from will not overlap.
+	*/
+	/* params
+	< to > < order_out is not used >
+		order_in:
+		order_depth:
+	< from >
+		order_in:
+		order_out:
+		order_depth:
+	*/
+	protected function subtree_adjust_position_state($to, $from){
+		$order_adjustment = $to['order_in'] - $from['order_in'];
+		$depth_adjustment = $to['order_depth'] - $from['order_depth'];
+		$updates = [];
+		if($order_adjustment){
+			$updates[':order_in'] = 'order_in + '.$order_adjustment;
+			$updates[':order_out'] = 'order_out + '.$order_adjustment;
+		}
+		if($depth_adjustment){
+			$updates[':order_depth'] = 'order_depth + '.$depth_adjustment;
+		}
+		if($updates){
+			$wheres = $this->tree_where_get(['order_in?>=' => $from['order_in'], 'order_out?<='=>$from['order_out']]);
+			$this->db->update($this->table, $updates, $wheres);
+		}
+	}
+
+	# in isolation, adjust the order_x attributes of a subtree to some new position
+	protected function subtree_adjust_position_state_by_node($to, $node){
+		$node = $this->node_get($node); # force get to account for whatever changes might have taken place from the offset
+		return $this->subtree_adjust_position_state($to, $node);
+	}
+
+
+	public function tree_node_delete($fk=null){
 		$this->db->delete($this->table, $this->tree_where_get());
 	}
 
-	function tree_where_get($wheres=[]){
+	public function tree_where_get($wheres=[]){
 		return Arrays::merge($this->base_where, (array)$wheres);
 	}
+	public function tree_all_nodes(){
+		return $this->db->rows('select * from '.$this->db->quote_identity($this->table).$this->db->where($this->tree_where_get(), false).' order by order_in');
+	}
 
+	# about: get an existing node from provided information
 	/* params
 		< node > < an id | a node array | a where set that identifies a node >
 	*/
-	protected function node_get($node){
+	public function node_get($node){
 		if(Tool::isInt($node)){ # get by id
 			return $this->db->row($this->table, $this->tree_where_get(['id'=>$node]), Arrays::implode(',', $this->columns));
 		}elseif(is_array($node)){ # although we have what might already be a node, freshness is insisted
@@ -91,7 +165,7 @@ class DbTree{
 		return (array)$node;
 	}
 	# depending on what was passed in, either return unchanged or run `node_get`
-	protected function node_return($node){
+	public function node_return($node){
 		if(is_array($node) && isset($node['order_in']) && isset($node['order_out']) && isset($node['id'])){
 			return $node;
 		}
@@ -104,7 +178,7 @@ class DbTree{
 	}
 
 
-	protected function node_get_parent($node){
+	public function node_get_parent($node){
 		return $this->db->row($this->table,$this->base_where + ['id'=>$node['id__parent']]);
 	}
 	# delete node and its children, and collapse tree
@@ -115,47 +189,71 @@ class DbTree{
 
 		$this->tree_offset(-$this->node_size($node), $node['order_in']);
 	}
+	# calculate node size based on order_in order_out keys on passed node object
 	static function node_size($node){
 		return ($node['order_out'] - $node['order_in']) + 1;
 	}
 
 
+	# move an existing node to a sane position (order_in + id__parent + order_depth)
+	/* Caution
+	The $position is expected to be calculated (sane).  Use another non-"raw" function instead
+	*/
+	# Note: the sanity of the parent is not checked.
+	/* params
+	< node > < id or object >
+	< position >
+		order_in:
+		order_depth:
+		id__parent:
+	*/
+	protected function node_raw_move($node, $position){
+		$node = $this->node_return($node);
+
+		$size = $this->node_size($node);
+		$this->tree_offset($size, $position['order_in']); # make room for the node at the target position by moving things right
+
+		if($node['order_in'] >= $position['order_in']){
+			#< if the node was moved right to make space for itself (because it came after the move target position), then remake where it is `from` with the new order_in and order_out
+			$from = [
+				'order_in'=>$node['order_in'] + $size,
+				'order_out'=>$node['order_out'] + $size,
+				'order_depth' => $node['order_depth'],
+			];
+		}else{
+			#< node was not affected by the "make-space" offset (it existed before the move position), so the `from` is unaffected
+			$from = $node;
+		}
+		$this->subtree_adjust_position_state($position, $from);
+		$this->tree_offset(-$size, $from['order_in']);
+
+		if($node['id__parent'] != $position['id__parent']){
+			$this->db->update($this->table,['id__parent'=>$position['id__parent']],$node['id']);
+		}
+	}
+	protected function node_create($node, $position){
+		$size = 2;
+		$this->tree_offset($size, $position['order_in']);
+		$node['order_in'] = $position['order_in'];
+		$node['order_out'] = $node['order_in'] + 1;
+		$node['order_depth'] = $position['order_depth'];
+		$node['id__parent'] = $position['id__parent'] ? $position['id__parent'] : 0;
+		return $this->db->insert($this->table, array_merge($this->base_insert, $node));
+	}
+
+
 	# insert new or existing node at position by moving things right
-	protected function node_insert($node,$position=[]){
+	protected function node_insert($node,$position){
 		if(Tool::is_int($node)){
 			$node = $this->node_get($node);
 		}
 		if($node['order_in']){//node is being moved
-			$size = $this->node_size($node);
-			$this->tree_offset($size, $position['order_in']);
-			if($node['order_in'] >= $position['order_in']){ # account for tree_offset
-				$from = [
-					'order_in'=>$node['order_in'] + $size,
-					'order_out'=>$node['order_out'] + $size,
-					'order_depth' => $node['order_depth'],
-				];
-			}else{
-				$from = $node; # node was before offset and so was unaffected
-			}
-			$this->subtree_adjust_position_state($position, $from);
-			$this->tree_offset(-$size, $from['order_in']);
-
-			if($node['id__parent'] != $position['id__parent']){
-				$this->db->update($this->table,['id__parent'=>$position['id__parent']],$node['id']);
-			}
-		}else{# node is being inserted
-			$size = 2;
-			$this->tree_offset($size, $position['order_in']);
-			$node['order_in'] = $position['order_in'];
-			$node['order_out'] = $node['order_in'] + 1;
-			$node['order_depth'] = $position['order_depth'];
-			$node['id__parent'] = $position['id__parent'] ? $position['id__parent'] : 0;
-			return $this->db->insert($this->table, array_merge($this->base_insert, $node));
+			return $this->node_raw_move($node, $position);
+		}else{# node is being inserted/created
+			return $this->node_create($node, $position);
 		}
 	}
-	function tree_all_nodes(){
-		return $this->db->rows('select * from '.$this->db->quote_identity($this->table).$this->db->where($this->tree_where_get(), false).' order by order_in');
-	}
+
 
 	# append new or existing node to a parent node or to root
 	protected function node_append($node,$parent=[]){
@@ -199,78 +297,28 @@ class DbTree{
 		}
 		return $this->node_insert($node,$position);
 	}
-
-
-
-
-	# Expand a tree to fit a node (empty node (+2) or a childed node (+2 + 2x)), at some position, by increasing the order ins and order outs above the position
-	protected function tree_expand($node, $order_in){
+	# move a node to the left of (before) another node
+	protected function node_move_before_node($node, $before_node){
 		$node = $this->node_return($node);
-		$adjustment = $node['order_out'] ? $node['order_out'] - $node['order_in'] + 1 : 2;
-		$this->tree_offset($adjustment, $order_in);
+		$before_node = $this->node_return($before_node);
+		$this->node_raw_move($node, $before_node);
 	}
-	# Collapse a tree to account for removed node (empty node (-2) or a childed node (-2 - 2x)), at some position, by increasing the order ins and order outs above the position
-	protected function tree_collapse($node){
+	# move a node to the right of (after) another node
+	protected function node_move_after_node($node, $after_node){
 		$node = $this->node_return($node);
-		$adjustment = $node['order_out'] - $node['order_in'] + 1;
-		$this->tree_offset(-$adjustment, $node['order_in']);
-	}
-
-	# offset orders >= some `order_in`
-	protected function tree_offset($offset, $order_in){
-		# update following nodes
-		$this->db->update($this->table,
-			[':order_in'=> 'order_in + '.$offset],  $this->tree_where_get(['order_in?>='=>$order_in]));
-		# update containing and following nodes
-		$this->db->update($this->table,
-			[':order_out'=> 'order_out + '.$offset], $this->tree_where_get(['order_out?>='=>$order_in]));
-	}
-
-
-
-	# in isolation, adjust the order state attributes of a subtree to some new position
-	protected function subtree_adjust_position_state_by_node($to, $node){
-		$node = $this->node_get($node); # force get to account for whatever changes might have taken place from the offset
-		return $this->subtree_adjust_position_state($to, $node);
-	}
-	protected function subtree_adjust_position_state($to, $from){
-		$order_adjustment = $to['order_in'] - $from['order_in'];
-		$depth_adjustment = $to['order_depth'] - $from['order_depth'];
-		$updates = [];
-		if($order_adjustment){
-			$updates[':order_in'] = 'order_in + '.$order_adjustment;
-			$updates[':order_out'] = 'order_out + '.$order_adjustment;
-		}
-		if($depth_adjustment){
-			$updates[':order_depth'] = 'order_depth + '.$depth_adjustment;
-		}
-		if($updates){
-			$wheres = $this->tree_where_get(['order_in?>=' => $from['order_in'], 'order_out?<='=>$from['order_out']]);
-			$this->db->update($this->table, $updates, $wheres);
-		}
+		$after_node = $this->node_return($after_node);
+		$position = [
+				'id__parent' => $after_node['id__parent'],
+				'order_depth' => $after_node['order_depth'],
+				'order_in' => $after_node['order_out'] + 1,
+			];
+		$this->node_raw_move($node, $position);
 	}
 
 
 
 
-	///adjust node and children order_in after move
-
-	protected function tree_adjust($node,$orderIn,$depth,$additionalAdjustment=false){
-		$orderAdjustment = $orderIn - $node['order_in'];
-		if($additionalAdjustment){
-			$node['order_in'] += $additionalAdjustment;
-			$node['order_out'] += $additionalAdjustment;
-			$orderAdjustment -= $additionalAdjustment;//moving backwards, so effectively increases |x|
-		}
-		$depthAdjustment = $depth - $node['order_depth'];
-		$this->db->update($this->table,
-			[':order_in'=> 'order_in + '.$orderAdjustment,
-				':order_out'=> 'order_out + '.$orderAdjustment,
-				':order_depth' => 'order_depth + '.$depthAdjustment],
-			$this->base_where + ['order_in?>='=>$node['order_in'], 'order_in?<='=>$node['order_out']]);
-	}
-
-	protected function node_parent($node,$columns=[]){
+	public function node_parent($node,$columns=[]){
 		$node = $this->node_return($node);
 		if(!$columns){
 			$columns = $this->columns;
@@ -283,14 +331,14 @@ class DbTree{
 			from '.$this->db->quote_identity($this->table).'
 			where id = ?', [$node['id__parent']]]);
 	}
-	protected function node_parent_id($node){
+	public function node_parent_id($node){
 		$node = $this->node_return($node);
 		return $node['id__parent'];
 	}
 
 
 	//sql to get all columns for parents (enclose it in other sql for further restrictions)
-	protected function node_parent_sql($node){
+	public function node_parent_sql($node){
 		$node = $this->node_return($node);
 
 		$where = $this->db->where($this->tree_where_get([
@@ -301,7 +349,7 @@ class DbTree{
 			from '.$this->db->quote_identity($this->table).$where.' ';
 	}
 	///returns parents in order of desc depth
-	protected function node_parents($node,$columns=[]){
+	public function node_parents($node,$columns=[]){
 		$node = $this->node_return($node);
 		if(!$columns){
 			$columns = $this->columns;
@@ -315,7 +363,7 @@ class DbTree{
 			order by t1.order_depth desc');
 
 	}
-	protected function node_has_parent($node,$parent){
+	public function node_has_parent($node,$parent){
 		$node = $this->node_return($node);
 		$parent = $this->node_return($parent);
 
@@ -324,7 +372,7 @@ class DbTree{
 		}
 		return false;
 	}
-	protected function node_children($node=null,$columns=[]){
+	public function node_children($node=null,$columns=[]){
 		if(!$columns){
 			$columns = $this->columns;
 		}
@@ -339,7 +387,7 @@ class DbTree{
 			$this->tree_where_get($where),
 			$columns, 'order_in asc');
 	}
-	protected function node_has_child($node,$child){
+	public function node_has_child($node,$child){
 		$node = $this->node_return($node);
 		$child = $this->node_return($child);
 		if($node['order_in'] < $child['order_in'] && $node['order_out'] > $child['order_out']){
@@ -347,7 +395,7 @@ class DbTree{
 		}
 		return false;
 	}
-	protected function node_immediate_children($node=null,$columns=[]){
+	public function node_immediate_children($node=null,$columns=[]){
 		if(!$columns){
 			$columns = $this->columns;
 		}
@@ -362,7 +410,7 @@ class DbTree{
 			$this->tree_where_get($where),
 			$columns, 'order_in asc');
 	}
-	protected function node_children_as_nested($node=null,$columns=[]){
+	public function node_children_as_nested($node=null,$columns=[]){
 		if(!$columns){
 			$columns = $this->columns;
 		}
@@ -381,7 +429,7 @@ class DbTree{
 	}
 
 	# find gaps in order_in order_out sequence
-	protected function tree_gaps(){
+	public function tree_gaps(){
 		$all = $this->db->rows('select order_in, order_out, order_depth, name from '.$this->db->quote_identity($this->table).$this->db->where($this->tree_where_get(), false).' order by order_in');
 		$orders = [];
 		$order_ins = [];
@@ -401,6 +449,7 @@ class DbTree{
 		}
 		return $gaps;
 	}
+	# append the children from one node to another
 	protected function node_move_children_to_node($from_node, $to){
 		$from_node = $this->node_return($from_node);
 		$from = [
@@ -444,14 +493,32 @@ class DbTree{
 	/*
 	replace one node with another, even if replacee is parent
 	*/
+	/* Ex
+	replace `joe` with `sue`
+
+	-	bob
+	-	joe
+		-	jane
+		-	sue
+			-	moe
+	-	bill
+
+	becomes
+
+	-	joe
+	-	sue
+		-	moe
+		-	jane
+	-	bill
+	*/
 	protected function node_replace_with($replacee, $replacer){
 		$replacee = $this->node_return($replacee);
 		$replacer = $this->node_return($replacer);
 
 		# put replacer in front of
-		$this->node_insert($replacer, $replacee);
+		$this->node_raw_move($replacer, $replacee);
 
-		# the insert changes the node placements, so reget
+		# the insert changes the node placements, so re-get
 		$replacee = $this->node_get($replacee);
 		$replacer = $this->node_get($replacer);
 
