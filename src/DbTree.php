@@ -35,7 +35,12 @@ class DbTree{
 	public $db;
 	public $base_where = array();
 
-
+	/* params
+	< table > < the db table >
+	< options >
+		db: < the db instance >
+		columns: < an array of columns.  If not present, will determine from db table >
+	*/
 	function __construct($table, $options=[]){
 		if(!$options['db']){
 			$options['db'] = Db::primary();
@@ -50,7 +55,12 @@ class DbTree{
 		}
 		$this->base_insert = (array)$options['insert'];
 
-		$this->columns = $this->db->column_names($table);
+		if($options['columns']){
+			$this->columns = $options['columns'];
+		}
+		if($this->columns){
+			$this->columns = $this->db->column_names($table);
+		}
 	}
 	///tree operations need to be atomic, and mutex
 	function __call($fnName,$args){
@@ -158,7 +168,7 @@ class DbTree{
 				return $this->db->row($this->table, $this->tree_where_get(['id'=>$node['id']]), Arrays::implode(',', $this->columns));
 			}elseif($node['order_id']){ # get by order_id
 				return $this->db->row($this->table, $this->tree_where_get(['order_in'=>$node['order_in']]), Arrays::implode(',', $this->columns));
-			}else{ # perhaps we have a where set
+			}else{ # perhaps we have a where set (like ['system_name'=>'bob'])
 				return $this->db->row($this->table, $this->tree_where_get($where), Arrays::implode(',', $this->columns));
 			}
 		}
@@ -314,8 +324,44 @@ class DbTree{
 			];
 		$this->node_raw_move($node, $position);
 	}
-
-
+	# move a node to under a parent node at a certain offset relative to the number of immediate children
+	/* params
+	< position > < index target starting at 0 >
+	*/
+	protected function node_move_with_parent_and_index($node, $parent, $position){
+		$node = $this->node_return($node);
+		$parent = $this->node_return($parent);
+		$children = $this->node_immediate_children($parent);
+		if(count($children) == 0){ # no children, just append
+			$this->node_append($node, $parent);
+		}elseif($position == 0){
+			$this->node_move_before_node($node, $children[0]);
+		}else{
+			#+ the position is given as the theoretical offset when the moving node is not in the tree.  Consequently, if the node is already a child of the parent, we must alter the position to account for this
+			$node_already_child = false;
+			foreach($children as $current_offset=>$child){
+				if($node['id'] == $child['id']){
+					$node_already_child = true;
+					break;
+				}
+			}
+			if($node_already_child){
+				if($current_offset < $position){
+					/* if the moving node were removed, and the nodes to the right were adjusted to the left, the index of those nodes would be -1 - and to account for this, we add one to the target position (instead of adjusting the other children indexes)
+					For example, a moving node at index 1, being sent to index 2J:
+					-	if the node were not already a child, then positioning the node at index 2 would be by moving the current node at index 2 to the right
+					-	if the node were a child, then in moving the node from 1 to 2, there is a gap created, that should be filled by the node that was at index 2
+					*/
+					$position++;
+				}
+			}
+			if($position >= count($children)){
+				$this->node_move_after_node($node, array_pop($children));
+			}else{
+				$this->node_move_before_node($node, $children[$position]);
+			}
+		}
+	}
 
 
 	public function node_parent($node,$columns=[]){
