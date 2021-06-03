@@ -42,7 +42,7 @@ class DbTree{
 		columns: < an array of columns.  If not present, will determine from db table >
 	*/
 	function __construct($table, $options=[]){
-		if(!$options['db']){
+		if(empty($options['db'])){
 			$options['db'] = Db::primary();
 		}
 		$this->db = $options['db'];
@@ -274,7 +274,7 @@ class DbTree{
 			$parent = $this->node_return($parent);
 		}
 
-		if(!$parent['order_out']){# no parent, add to end of top level
+		if(empty($parent['order_out'])){# no parent, add to end of top level
 			$lastOrderIn = $this->db->value($this->table,$this->base_where,'order_out','order_out desc');
 			$position['order_in'] = $lastOrderIn + 1;
 			$position['order_depth'] = 1;
@@ -296,7 +296,7 @@ class DbTree{
 			$parent = $this->node_return($parent);
 		}
 
-		if(!$parent['order_in']){# no parent, add to beginning of top level
+		if(empty($parent['order_in'])){# no parent, add to beginning of top level
 			$position['order_in'] = 1;
 			$position['order_depth'] = 1;
 			$position['id__parent'] = 0;
