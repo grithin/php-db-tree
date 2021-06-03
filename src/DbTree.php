@@ -55,7 +55,7 @@ class DbTree{
 		}
 		$this->base_insert = (array)$options['insert'];
 
-		if($options['columns']){
+		if(!empty($options['columns'])){
 			$this->columns = $options['columns'];
 		}
 		if($this->columns){
@@ -164,9 +164,9 @@ class DbTree{
 		if(Tool::isInt($node)){ # get by id
 			return $this->db->row($this->table, $this->tree_where_get(['id'=>$node]), Arrays::implode(',', $this->columns));
 		}elseif(is_array($node)){ # although we have what might already be a node, freshness is insisted
-			if($node['id']){ # get by id
+			if(!empty($node['id'])){ # get by id
 				return $this->db->row($this->table, $this->tree_where_get(['id'=>$node['id']]), Arrays::implode(',', $this->columns));
-			}elseif($node['order_id']){ # get by order_id
+			}elseif(!empty($node['order_id'])){ # get by order_id
 				return $this->db->row($this->table, $this->tree_where_get(['order_in'=>$node['order_in']]), Arrays::implode(',', $this->columns));
 			}else{ # perhaps we have a where set (like ['system_name'=>'bob'])
 				return $this->db->row($this->table, $this->tree_where_get($where), Arrays::implode(',', $this->columns));
@@ -257,7 +257,7 @@ class DbTree{
 		if(Tool::is_int($node)){
 			$node = $this->node_get($node);
 		}
-		if($node['order_in']){//node is being moved
+		if(!empty($node['order_in'])){//node is being moved
 			return $this->node_raw_move($node, $position);
 		}else{# node is being inserted/created
 			return $this->node_create($node, $position);
