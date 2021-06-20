@@ -31,7 +31,7 @@ create table tree (
 
 
 class DbTree{
-	use \Grithin\testCall;
+	use \Grithin\Traits\testCall;
 	public $db;
 	public $base_where = array();
 
