@@ -161,7 +161,7 @@ class DbTree{
 		< node > < an id | a node array | a where set that identifies a node >
 	*/
 	public function node_get($node){
-		if(Tool::isInt($node)){ # get by id
+		if(Tool::is_int($node)){ # get by id
 			return $this->db->row($this->table, $this->tree_where_get(['id'=>$node]), Arrays::implode(',', $this->columns));
 		}elseif(is_array($node)){ # although we have what might already be a node, freshness is insisted
 			if(!empty($node['id'])){ # get by id
