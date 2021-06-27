@@ -92,7 +92,7 @@ You should wrap $DbTree manipulation operations in try blocks in case the Db tra
 
 ## Useful functions
 (see Docblocks)
--  manipualtion
+-  manipulation
    -  node_append
    -  node_prepend
    -  node_delete
