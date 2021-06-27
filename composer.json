@@ -1,5 +1,5 @@
 {
-    "name": "grithin/php-dbtree",
+    "name": "grithin/php-db-tree",
     "description": "PHP db tree.",
     "keywords": ["php db tree"],
     "license": "Apache-2.0",
@@ -8,20 +8,6 @@
         {
             "name": "Adam F Frederick",
             "email": "bob_bf2@deemit.com"
-        }
-    ],
-	 "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://repos.clrmo.com/root/phpbase.git"
-        },
-		  {
-            "type": "vcs",
-            "url": "https://repos.clrmo.com/root/phpdb.git"
-        },
-        {
-            "type": "vcs",
-            "url": "https://repos.clrmo.com/root/php-loaded.git"
         }
     ],
     "require": {

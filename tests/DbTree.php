@@ -1,9 +1,4 @@
 <?php
-# run with `phpunit DbTree.php`
-
-$_ENV['root_folder'] = realpath(dirname(__FILE__).'/../').'/';
-require $_ENV['root_folder'] . '/vendor/autoload.php';
-
 use PHPUnit\Framework\TestCase;
 
 use \Grithin\Debug;
@@ -27,7 +22,7 @@ function args_accumulator(){
 	global $accumulation;
 	$accumulation[] = $args;
 }
-function accumulate_array_changes($this, $changes){
+function accumulate_array_changes($that, $changes){
 	global $accumulation;
 	$accumulation[] = (array)$changes;
 }
